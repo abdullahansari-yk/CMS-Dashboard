@@ -1,3 +1,4 @@
+  
 import { useState } from "react";
 import "./App.css";
 
@@ -9,6 +10,7 @@ const initialPages = [
     status: "Published",
     heading: "Welcome to Our Website",
     description: "Discover our services and learn more about what we do.",
+    image: "",
   },
   {
     id: 2,
@@ -17,6 +19,7 @@ const initialPages = [
     status: "Published",
     heading: "About Our Company",
     description: "Learn more about our company and our mission.",
+    image: "",
   },
   {
     id: 3,
@@ -25,6 +28,7 @@ const initialPages = [
     status: "Draft",
     heading: "Our Services",
     description: "Explore the services we offer.",
+    image: "",
   },
 ];
 
@@ -32,12 +36,17 @@ function App() {
   const [pages, setPages] = useState(initialPages);
   const [selectedPageId, setSelectedPageId] = useState(null);
   const [formData, setFormData] = useState(null);
-
+  const [mediaFiles, setMediaFiles] = useState([]);
+  const [uploadError, setUploadError] = useState("");
   const [activeView, setActiveView] = useState("Overview");
 
-  const selectedPage = pages.find(
-    (page) => page.id === selectedPageId
-  );
+  const publishedCount = pages.filter(
+    (page) => page.status === "Published"
+  ).length;
+
+  const draftCount = pages.filter(
+    (page) => page.status === "Draft"
+  ).length;
 
   function openEditor(page) {
     setSelectedPageId(page.id);
@@ -53,10 +62,10 @@ function App() {
       status: "Draft",
       heading: "",
       description: "",
+      image: "",
     };
 
     setPages((currentPages) => [...currentPages, newPage]);
-
     setSelectedPageId(newPage.id);
     setFormData({ ...newPage });
     setActiveView("Editor");
@@ -103,15 +112,89 @@ function App() {
     }
   }
 
-  const publishedCount = pages.filter(
-    (page) => page.status === "Published"
-  ).length;
+  function handleImageUpload(event) {
+    const files = Array.from(event.target.files || []);
+    const errors = [];
+    const validFiles = [];
 
-  const draftCount = pages.filter(
-    (page) => page.status === "Draft"
-  ).length;
+    setUploadError("");
+
+    for (const file of files) {
+      if (!file.type.startsWith("image/")) {
+        errors.push(`${file.name} is not an image.`);
+        continue;
+      }
+
+      if (file.size > 5 * 1024 * 1024) {
+        errors.push(`${file.name} exceeds the 5 MB limit.`);
+        continue;
+      }
+
+      validFiles.push({
+        id: crypto.randomUUID(),
+        name: file.name,
+        url: URL.createObjectURL(file),
+        size: file.size,
+      });
+    }
+
+    setMediaFiles((currentFiles) => [
+      ...currentFiles,
+      ...validFiles,
+    ]);
+
+    if (errors.length > 0) {
+      setUploadError(errors.join(" "));
+    }
+
+    // Allow selecting the same file again.
+    event.target.value = "";
+  }
+
+  function deleteImage(imageId) {
+    const image = mediaFiles.find(
+      (file) => file.id === imageId
+    );
+
+    if (!image) return;
+
+    const confirmed = window.confirm(
+      `Delete "${image.name}" from the media library?`
+    );
+
+    if (!confirmed) return;
+
+    // Remove this image from any page that uses it.
+    setPages((currentPages) =>
+      currentPages.map((page) =>
+        page.image === image.url
+          ? { ...page, image: "" }
+          : page
+      )
+    );
+
+    setFormData((currentData) =>
+      currentData?.image === image.url
+        ? { ...currentData, image: "" }
+        : currentData
+    );
+
+    setMediaFiles((currentFiles) =>
+      currentFiles.filter((file) => file.id !== imageId)
+    );
+
+    // Revoke only the URL of the image being deleted.
+    URL.revokeObjectURL(image.url);
+  }
 
   function renderSidebar() {
+    const menuItems = [
+      { label: "Overview", icon: "▦" },
+      { label: "Pages", icon: "▤" },
+      { label: "Media Library", icon: "▧" },
+      { label: "Settings", icon: "⚙" },
+    ];
+
     return (
       <aside className="sidebar">
         <h2 className="logo">
@@ -121,27 +204,18 @@ function App() {
         <p className="menu-label">WORKSPACE</p>
 
         <nav>
-          {["Overview", "Pages", "Media Library", "Settings"].map(
-            (item) => (
-              <button
-                key={item}
-                className={`nav-link ${activeView === item ? "active" : ""
-                  }`}
-                onClick={() => setActiveView(item)}
-              >
-                <span>
-                  {{
-                    Overview: "▦",
-                    Pages: "▤",
-                    "Media Library": "▧",
-                    Settings: "⚙",
-                  }[item]}
-                </span>
-
-                {item}
-              </button>
-            )
-          )}
+          {menuItems.map((item) => (
+            <button
+              key={item.label}
+              className={`nav-link ${
+                activeView === item.label ? "active" : ""
+              }`}
+              onClick={() => setActiveView(item.label)}
+            >
+              <span>{item.icon}</span>
+              {item.label}
+            </button>
+          ))}
         </nav>
 
         <div className="sidebar-bottom">
@@ -162,7 +236,11 @@ function App() {
         <div className="empty-state">
           <h3>No pages yet</h3>
           <p>Create your first page to get started.</p>
-          <button className="primary-button" onClick={createPage}>
+
+          <button
+            className="primary-button"
+            onClick={createPage}
+          >
             + Create page
           </button>
         </div>
@@ -190,10 +268,11 @@ function App() {
 
                 <td>
                   <span
-                    className={`status ${page.status === "Published"
+                    className={`status ${
+                      page.status === "Published"
                         ? "published"
                         : "draft"
-                      }`}
+                    }`}
                   >
                     {page.status}
                   </span>
@@ -233,7 +312,10 @@ function App() {
             <p>Manage your website content from one place.</p>
           </div>
 
-          <button className="primary-button" onClick={createPage}>
+          <button
+            className="primary-button"
+            onClick={createPage}
+          >
             + Create page
           </button>
         </section>
@@ -259,8 +341,8 @@ function App() {
 
           <div className="stat-card">
             <p>Media Files</p>
-            <h2>0</h2>
-            <span>Images and assets</span>
+            <h2>{mediaFiles.length}</h2>
+            <span>Uploaded images</span>
           </div>
         </section>
 
@@ -294,7 +376,10 @@ function App() {
             <p>Create and manage your website pages.</p>
           </div>
 
-          <button className="primary-button" onClick={createPage}>
+          <button
+            className="primary-button"
+            onClick={createPage}
+          >
             + Create page
           </button>
         </div>
@@ -305,14 +390,27 @@ function App() {
   }
 
   function renderEditor() {
-    if (!formData) return null;
+    if (!formData) {
+      return (
+        <section className="pages-section">
+          <h2>No page selected</h2>
+
+          <button
+            className="secondary-button"
+            onClick={() => setActiveView("Pages")}
+          >
+            ← Back to pages
+          </button>
+        </section>
+      );
+    }
 
     return (
       <section className="pages-section">
         <div className="section-heading">
           <div>
             <h2>Edit Page</h2>
-            <p>Update your page content.</p>
+            <p>Changes appear in the preview as you type.</p>
           </div>
 
           <button
@@ -323,73 +421,244 @@ function App() {
           </button>
         </div>
 
-        <form className="editor-form" onSubmit={savePage}>
-          <label>
-            Page title
-            <input
-              name="title"
-              value={formData.title}
-              onChange={updateField}
-              required
-            />
-          </label>
+        <div className="editor-layout">
+          <form className="editor-form" onSubmit={savePage}>
+            <h3>Page Content</h3>
 
-          <label>
-            URL slug
-            <input
-              name="slug"
-              value={formData.slug}
-              onChange={updateField}
-              required
-            />
-          </label>
+            <label>
+              Page title
+              <input
+                name="title"
+                value={formData.title}
+                onChange={updateField}
+                required
+              />
+            </label>
 
-          <label>
-            Main heading
-            <input
-              name="heading"
-              value={formData.heading}
-              onChange={updateField}
-              required
-            />
-          </label>
+            <label>
+              URL slug
+              <input
+                name="slug"
+                value={formData.slug}
+                onChange={updateField}
+                required
+              />
+            </label>
 
-          <label>
-            Description
-            <textarea
-              name="description"
-              value={formData.description}
-              onChange={updateField}
-              rows={5}
-            />
-          </label>
+            <label>
+              Main heading
+              <input
+                name="heading"
+                value={formData.heading}
+                onChange={updateField}
+                required
+              />
+            </label>
 
-          <label>
-            Page status
-            <select
-              name="status"
-              value={formData.status}
-              onChange={updateField}
-            >
-              <option value="Draft">Draft</option>
-              <option value="Published">Published</option>
-            </select>
-          </label>
+            <label>
+              Description
+              <textarea
+                name="description"
+                value={formData.description}
+                onChange={updateField}
+                rows={5}
+              />
+            </label>
 
-          <div className="form-actions">
-            <button
-              type="button"
-              className="secondary-button"
-              onClick={() => setActiveView("Pages")}
-            >
-              Cancel
-            </button>
+            <label>
+              Featured Image
+              <select
+                name="image"
+                value={formData.image || ""}
+                onChange={updateField}
+              >
+                <option value="">No image selected</option>
 
-            <button type="submit" className="primary-button">
-              Save changes
-            </button>
+                {mediaFiles.map((file) => (
+                  <option key={file.id} value={file.url}>
+                    {file.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            {formData.image && (
+              <div className="selected-image-preview">
+                <img
+                  src={formData.image}
+                  alt={formData.heading || formData.title}
+                />
+
+                <button
+                  type="button"
+                  className="secondary-button"
+                  onClick={() =>
+                    setFormData((currentData) => ({
+                      ...currentData,
+                      image: "",
+                    }))
+                  }
+                >
+                  Remove from page
+                </button>
+              </div>
+            )}
+
+            <label>
+              Page status
+              <select
+                name="status"
+                value={formData.status}
+                onChange={updateField}
+              >
+                <option value="Draft">Draft</option>
+                <option value="Published">Published</option>
+              </select>
+            </label>
+
+            <div className="form-actions">
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={() => setActiveView("Pages")}
+              >
+                Cancel
+              </button>
+
+              <button
+                type="submit"
+                className="primary-button"
+              >
+                Save changes
+              </button>
+            </div>
+          </form>
+
+          <div className="preview-panel">
+            <div className="preview-toolbar">
+              <span>LIVE PREVIEW</span>
+              <span className="preview-indicator">
+                ● Updating
+              </span>
+            </div>
+
+            <div className="website-preview">
+              <nav className="preview-nav">
+                <strong>{formData.title || "Untitled Page"}</strong>
+                <span>Home&nbsp;&nbsp; About&nbsp;&nbsp; Contact</span>
+              </nav>
+
+              <section className="preview-hero">
+                <span className="preview-eyebrow">
+                  YOUR WEBSITE
+                </span>
+
+                {formData.image && (
+                  <img
+                    className="preview-featured-image"
+                    src={formData.image}
+                    alt={formData.heading || formData.title}
+                  />
+                )}
+
+                <h1>
+                  {formData.heading ||
+                    "Your heading will appear here"}
+                </h1>
+
+                <p>
+                  {formData.description ||
+                    "Your description will appear here."}
+                </p>
+
+                <button
+                  type="button"
+                  className="preview-button"
+                >
+                  Learn More →
+                </button>
+              </section>
+
+              <footer className="preview-footer">
+                © 2026 {formData.title || "Your Website"}
+              </footer>
+            </div>
           </div>
-        </form>
+        </div>
+      </section>
+    );
+  }
+
+  function renderMediaLibrary() {
+    return (
+      <section className="pages-section">
+        <div className="section-heading">
+          <div>
+            <h2>Media Library</h2>
+            <p>Upload and manage your website images.</p>
+          </div>
+
+          <label className="primary-button upload-button">
+            + Upload Images
+            <input
+              type="file"
+              accept="image/*"
+              multiple
+              hidden
+              onChange={handleImageUpload}
+            />
+          </label>
+        </div>
+
+        <div className="media-info">
+          <span>
+            {mediaFiles.length} image
+            {mediaFiles.length !== 1 ? "s" : ""}
+          </span>
+
+          <span>Maximum 5 MB per image</span>
+        </div>
+
+        {uploadError && (
+          <p className="upload-error" role="alert">
+            {uploadError}
+          </p>
+        )}
+
+        {mediaFiles.length === 0 ? (
+          <div className="media-empty">
+            <div className="media-empty-icon">▧</div>
+            <h3>Your media library is empty</h3>
+            <p>
+              Upload images from your computer to get started.
+            </p>
+          </div>
+        ) : (
+          <div className="media-grid">
+            {mediaFiles.map((file) => (
+              <div className="media-card" key={file.id}>
+                <div className="media-image">
+                  <img src={file.url} alt={file.name} />
+                </div>
+
+                <div className="media-card-info">
+                  <p title={file.name}>{file.name}</p>
+
+                  <span>
+                    {(file.size / 1024).toFixed(1)} KB
+                  </span>
+
+                  <button
+                    className="delete-button"
+                    onClick={() => deleteImage(file.id)}
+                  >
+                    Delete image
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </section>
     );
   }
@@ -429,9 +698,8 @@ function App() {
         {activeView === "Overview" && renderOverview()}
         {activeView === "Pages" && renderPages()}
         {activeView === "Editor" && renderEditor()}
-
-        {!["Overview", "Pages", "Editor"].includes(activeView) &&
-          renderOtherView()}
+        {activeView === "Media Library" && renderMediaLibrary()}
+        {activeView === "Settings" && renderOtherView()}
       </main>
     </div>
   );
